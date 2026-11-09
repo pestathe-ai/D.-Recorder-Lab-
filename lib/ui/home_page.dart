@@ -7,6 +7,7 @@ import '../services/app_services.dart';
 import '../services/library.dart';
 import '../services/native_bridge.dart';
 import 'detail_page.dart';
+import 'import_dialog.dart';
 import 'recording_page.dart';
 import 'settings_page.dart';
 import 'theme.dart';
@@ -88,6 +89,27 @@ class _HomePageState extends State<HomePage> {
     ));
   }
 
+  Future<void> _import() async {
+    final navigator = Navigator.of(context);
+    final picked = await s.native.pickAudio();
+    if (picked == null || !mounted) return;
+    final done = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ImportDialog(
+        services: s,
+        uri: picked.uri,
+        outPath: s.library.importTempPath(),
+        name: picked.name,
+      ),
+    );
+    if (done != true) return;
+    final entry = s.library.addImported(picked.name);
+    navigator.push(MaterialPageRoute(
+      builder: (_) => DetailPage(services: s, entry: entry),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = _status?.active ?? false;
@@ -162,19 +184,43 @@ class _HomePageState extends State<HomePage> {
                   icon: const Icon(Icons.graphic_eq),
                   label: Text('In corso · ${formatClock(_status!.elapsed)}'),
                 )
-              : FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Brand.orange,
-                    foregroundColor: Brand.ink,
-                    textStyle: const TextStyle(
-                      fontFamily: 'Sora',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
+              : Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: SizedBox(
+                        height: 60,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Brand.orange,
+                            foregroundColor: Brand.ink,
+                            textStyle: const TextStyle(
+                              fontFamily: 'Sora',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                            ),
+                          ),
+                          onPressed: _record,
+                          icon: const Icon(Icons.mic),
+                          label: const Text('Registra'),
+                        ),
+                      ),
                     ),
-                  ),
-                  onPressed: _record,
-                  icon: const Icon(Icons.mic),
-                  label: const Text('Registra'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SizedBox(
+                        height: 60,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          onPressed: _import,
+                          icon: const Icon(Icons.file_upload_outlined),
+                          label: const Text('Importa'),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
         ),
       ),
@@ -199,7 +245,7 @@ class _Empty extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Premi Registra all\'inizio della riunione: potrai spegnere lo schermo e trascrivere tutto dopo.',
+            'Premi Registra all\'inizio della riunione, oppure Importa per trascrivere un audio che hai già.',
             textAlign: TextAlign.center,
           ),
         ],

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -12,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var pendingPermission: MethodChannel.Result? = null
+    private var pendingPick: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -34,6 +36,13 @@ class MainActivity : FlutterActivity() {
                         )
                         result.success(null)
                     }
+                    "pickAudio" -> pickAudio(result)
+                    "importStart" -> {
+                        AudioImporter.start(this, Uri.parse(call.argument<String>("uri")!!), call.argument<String>("path")!!)
+                        result.success(null)
+                    }
+                    "importStatus" -> result.success(AudioImporter.statusMap())
+                    "importCancel" -> { AudioImporter.cancel(); result.success(null) }
                     "processingUpdate" -> {
                         ProcessingService.update(
                             this,
@@ -47,6 +56,32 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun pickAudio(result: MethodChannel.Result) {
+        pendingPick?.success(null)
+        pendingPick = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+            .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("audio/*", "video/*"))
+        startActivityForResult(intent, 4712)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 4712) return
+        val uri = if (resultCode == RESULT_OK) data?.data else null
+        var name = "Audio importato"
+        if (uri != null) {
+            try {
+                contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                    if (it.moveToFirst() && !it.isNull(0)) name = it.getString(0)
+                }
+            } catch (_: Exception) {}
+        }
+        pendingPick?.success(uri?.let { mapOf("uri" to it.toString(), "name" to name) })
+        pendingPick = null
     }
 
     private fun requestMic(result: MethodChannel.Result) {

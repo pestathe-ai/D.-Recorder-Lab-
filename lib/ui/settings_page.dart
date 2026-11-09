@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../core/ai_prompt.dart';
 import '../core/format.dart';
 import '../core/whisper_catalog.dart';
 import '../services/app_services.dart';
@@ -16,16 +15,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   AppServices get s => widget.services;
-  late final _key = TextEditingController(text: s.settings.aiKey ?? '');
-  late final _aiModel = TextEditingController(text: s.settings.aiModel);
-  bool _showKey = false;
-
-  @override
-  void dispose() {
-    _key.dispose();
-    _aiModel.dispose();
-    super.dispose();
-  }
 
   Widget _heading(String text) => Padding(
         padding: const EdgeInsets.only(top: 18, bottom: 10),
@@ -110,38 +99,6 @@ class _SettingsPageState extends State<SettingsPage> {
             _defaultField('luogo', 'Luogo'),
             _defaultField('presidente', 'Presidente'),
             _defaultField('segretario', 'Segretario'),
-            _heading('Bozza con IA (facoltativa)'),
-            Text(
-              'Inserisci una chiave API di Anthropic per attivare il pulsante "Bozza con IA". '
-              'La trascrizione viene inviata solo quando lo premi e confermi.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _key,
-              obscureText: !_showKey,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: 'Chiave API',
-                suffixIcon: IconButton(
-                  tooltip: _showKey ? 'Nascondi' : 'Mostra',
-                  icon: Icon(_showKey ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _showKey = !_showKey),
-                ),
-              ),
-              onChanged: s.settings.setAiKey,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _aiModel,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Modello IA',
-                hintText: kDefaultAiModel,
-              ),
-              onChanged: (v) => s.settings.aiModel = v,
-            ),
           ],
         ),
       ),

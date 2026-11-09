@@ -124,6 +124,35 @@ class RecordingLibrary extends ChangeNotifier {
     return entry;
   }
 
+  /// Dove il convertitore scrive un file durante l'importazione.
+  String importTempPath() {
+    final dir = Directory(p.join(root.path, '_import'))..createSync(recursive: true);
+    return p.join(dir.path, 'audio.wav');
+  }
+
+  /// Sposta in archivio un file appena importato.
+  RecordingEntry addImported(String fileName) {
+    final now = DateTime.now();
+    final id = now.millisecondsSinceEpoch.toString();
+    final dir = Directory(p.join(root.path, id))..createSync(recursive: true);
+    final title = p.basenameWithoutExtension(fileName).trim();
+    final entry = RecordingEntry(
+      dir,
+      RecordingMeta(
+        id: id,
+        title: title.isEmpty ? 'Audio importato' : title,
+        createdAt: now,
+        imported: true,
+      ),
+    );
+    File(importTempPath()).renameSync(entry.audio.path);
+    entry.saveMeta();
+    entry.refreshInfo();
+    items = [entry, ...items];
+    notifyListeners();
+    return entry;
+  }
+
   void rename(RecordingEntry e, String title) {
     final t = title.trim();
     if (t.isEmpty) return;

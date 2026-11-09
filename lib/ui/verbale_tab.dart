@@ -1,16 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../core/ai_prompt.dart';
+import '../core/chatbot.dart';
 import '../core/format.dart';
 import '../core/models.dart';
 import '../core/transcript_text.dart';
 import '../core/verbale_document.dart';
-import '../services/ai_client.dart';
 import 'detail_page.dart';
 
 class _Field {
@@ -57,7 +57,6 @@ class _VerbaleTabState extends State<VerbaleTab> with AutomaticKeepAliveClientMi
     for (final f in [..._header, ..._body])
       f: TextEditingController(text: f.get(page.verbale)),
   };
-  bool _aiRunning = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -116,46 +115,96 @@ class _VerbaleTabState extends State<VerbaleTab> with AutomaticKeepAliveClientMi
     page.verbaleChangedExternally();
   }
 
-  Future<void> _aiDraft() async {
-    final t = _doneTranscript();
-    if (t == null) return _needTranscript();
-    final messenger = ScaffoldMessenger.of(context);
-    final s = page.s;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Inviare la trascrizione?'),
-        content: const Text(
-          'Il testo della trascrizione verrà inviato ad Anthropic per preparare la bozza. '
-          'L\'audio resta sul telefono. I campi già compilati non verranno toccati.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Invia')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    setState(() => _aiRunning = true);
-    try {
-      final draft = await requestAiDraft(
-        apiKey: s.settings.aiKey!,
-        model: s.settings.aiModel,
+  String _chatbotText(Transcript t) => buildChatbotPrompt(
         transcript: transcriptToText(page.entry.meta.title, t, page.entry.meta.markers),
         current: page.verbale,
       );
-      applyAiDraft(page.verbale, draft);
-      page.verbaleChangedExternally();
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Bozza pronta: rileggila con attenzione, soprattutto [da verificare].'),
+
+  Future<void> _openChatbotSheet() async {
+    final t = _doneTranscript();
+    if (t == null) return _needTranscript();
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'Copia il testo e incollalo in un chatbot gratuito, come ChatGPT, '
+                'Gemini o Claude. Poi copia la risposta, torna qui e premi '
+                '"Incolla risposta".\n\n'
+                'Il contenuto della riunione verrà letto dal servizio che scegli. '
+                'Per i verbali riservati valuta di non usarlo.',
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copia il testo'),
+              onTap: () => Navigator.pop(ctx, 'copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file),
+              title: const Text('Invia come file'),
+              subtitle: const Text('Meglio per le riunioni molto lunghe'),
+              onTap: () => Navigator.pop(ctx, 'file'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == 'copy') {
+      await Clipboard.setData(ClipboardData(text: _chatbotText(t)));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Copiato: ora incollalo nel chatbot.'),
       ));
-    } on AiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('Bozza non riuscita. Riprova.')));
-    } finally {
-      if (mounted) setState(() => _aiRunning = false);
+    } else if (choice == 'file') {
+      final dir = await getTemporaryDirectory();
+      final file = File(p.join(dir.path, 'Per chatbot - ${safeFileName(page.entry.meta.title)}.txt'));
+      await file.writeAsString(_chatbotText(t));
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(file.path, mimeType: 'text/plain')],
+        title: page.entry.meta.title,
+      ));
     }
+  }
+
+  Future<void> _pasteReply() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final fields = parseChatbotReply(data?.text ?? '');
+    if (fields.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Non ci sono testi copiati. Copia prima la risposta del chatbot.'),
+      ));
+      return;
+    }
+    var replace = true;
+    if (replyTouchesFilledFields(page.verbale, fields)) {
+      if (!mounted) return;
+      final answer = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Alcuni campi sono già compilati'),
+          content: const Text('Vuoi sostituirli con la risposta del chatbot?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Solo i vuoti')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sostituisci')),
+          ],
+        ),
+      );
+      if (answer == null) return;
+      replace = answer;
+    }
+    applyChatbotReply(page.verbale, fields, replace: replace);
+    page.verbaleChangedExternally();
+    messenger.showSnackBar(const SnackBar(
+      content: Text('Bozza inserita: rileggila, soprattutto i punti [da verificare].'),
+    ));
   }
 
   Future<void> _export(bool word) async {
@@ -204,7 +253,6 @@ class _VerbaleTabState extends State<VerbaleTab> with AutomaticKeepAliveClientMi
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final hasAi = page.s.settings.hasAiKey;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: [
@@ -217,18 +265,16 @@ class _VerbaleTabState extends State<VerbaleTab> with AutomaticKeepAliveClientMi
               icon: const Icon(Icons.notes),
               label: const Text('Usa la trascrizione'),
             ),
-            if (hasAi)
-              OutlinedButton.icon(
-                onPressed: _aiRunning ? null : _aiDraft,
-                icon: _aiRunning
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.auto_awesome),
-                label: Text(_aiRunning ? 'Preparo la bozza…' : 'Bozza con IA'),
-              ),
+            OutlinedButton.icon(
+              onPressed: _openChatbotSheet,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Riassumi con chatbot'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _pasteReply,
+              icon: const Icon(Icons.content_paste),
+              label: const Text('Incolla risposta'),
+            ),
           ],
         ),
         const SizedBox(height: 16),

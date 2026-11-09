@@ -57,9 +57,9 @@ class DetailPageState extends State<DetailPage> {
       luogo: s.settings.text('luogo'),
       presidente: s.settings.text('presidente'),
       segretario: s.settings.text('segretario'),
-      data: formatDate(start),
-      oraInizio: formatTime(start),
-      oraFine: formatTime(start.add(entry.duration)),
+      data: entry.meta.imported ? '' : formatDate(start),
+      oraInizio: entry.meta.imported ? '' : formatTime(start),
+      oraFine: entry.meta.imported ? '' : formatTime(start.add(entry.duration)),
     );
   }
 

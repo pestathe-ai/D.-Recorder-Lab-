@@ -48,6 +48,19 @@ class NativeBridge {
     return RecorderStatus.fromMap(map ?? const {});
   }
 
+  /// Apre il selettore di file. Null se l'utente annulla.
+  Future<({String uri, String name})?> pickAudio() async {
+    final map = await _channel.invokeMethod<Map<Object?, Object?>>('pickAudio');
+    if (map == null) return null;
+    return (uri: map['uri'] as String, name: map['name'] as String);
+  }
+
+  Future<void> importStart(String uri, String path) =>
+      _channel.invokeMethod('importStart', {'uri': uri, 'path': path});
+  Future<void> importCancel() => _channel.invokeMethod('importCancel');
+  Future<Map<Object?, Object?>> importStatus() async =>
+      await _channel.invokeMethod<Map<Object?, Object?>>('importStatus') ?? const {};
+
   Future<void> processingUpdate(String title, String text, int percent) =>
       _channel.invokeMethod('processingUpdate', {
         'title': title,

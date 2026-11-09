@@ -14,6 +14,7 @@ class RecordingMeta {
     required this.id,
     required this.title,
     required this.createdAt,
+    this.imported = false,
     List<Marker>? markers,
   }) : markers = markers ?? [];
 
@@ -22,6 +23,7 @@ class RecordingMeta {
         title: j['title'] as String? ?? 'Registrazione',
         createdAt: DateTime.tryParse(j['createdAt'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
+        imported: j['imported'] as bool? ?? false,
         markers: [
           for (final m in (j['markers'] as List? ?? const []))
             Marker.fromJson(Map<String, dynamic>.from(m as Map)),
@@ -31,12 +33,16 @@ class RecordingMeta {
   final String id;
   String title;
   final DateTime createdAt;
+
+  /// True per i file importati: la data di importazione non è quella della riunione.
+  final bool imported;
   final List<Marker> markers;
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
         'createdAt': createdAt.toIso8601String(),
+        'imported': imported,
         'markers': [for (final m in markers) m.toJson()],
       };
 }

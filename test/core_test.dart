@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:d_recorder_lab/core/ai_prompt.dart';
+import 'package:d_recorder_lab/core/chatbot.dart';
 import 'package:d_recorder_lab/core/format.dart';
 import 'package:d_recorder_lab/core/models.dart';
 import 'package:d_recorder_lab/core/transcript_text.dart';
@@ -81,38 +81,40 @@ void main() {
     });
   });
 
-  group('IA', () {
-    test('la richiesta contiene trascrizione e modello', () {
-      final r = buildAiRequest(model: 'm', transcript: 'ciao', current: Verbale());
-      expect(r['model'], 'm');
-      expect(jsonEncode(r), contains('<trascrizione>'));
+  group('Chatbot', () {
+    test('il testo contiene regole, titoli e trascrizione', () {
+      final text = buildChatbotPrompt(transcript: 'ciao a tutti', current: Verbale());
+      expect(text, contains('ORDINE DEL GIORNO'));
+      expect(text, contains('[da verificare]'));
+      expect(text, contains('ciao a tutti'));
     });
 
-    test('la bozza non cancella ciò che è già scritto', () {
-      final draft = parseAiResponse({
-        'content': [
-          {
-            'type': 'text',
-            'text': 'Ecco:\n{"presenti":"Rossi","discussione":"Nuova","delibere":"Approvato"}',
-          },
-        ],
-      });
-      final v = Verbale(discussione: 'Mia');
-      applyAiDraft(v, draft);
-      expect(v.presenti, 'Rossi');
-      expect(v.discussione, 'Mia');
-      expect(v.delibere, 'Approvato');
-    });
-
-    test('risposta illeggibile', () {
-      expect(
-        () => parseAiResponse({
-          'content': [
-            {'type': 'text', 'text': 'non so'},
-          ],
-        }),
-        throwsFormatException,
+    test('capisce titoli con formattazione diversa', () {
+      final fields = parseChatbotReply(
+        '## Presenti\nRossi\nBianchi\n\n**DISCUSSIONE:**\n'
+        'Discussione ampia sul **bilancio**.\n\nDELIBERE\n\nVARIE ED EVENTUALI\nNessuna',
       );
+      expect(fields['presenti'], 'Rossi\nBianchi');
+      expect(fields['discussione'], 'Discussione ampia sul bilancio.');
+      expect(fields.containsKey('delibere'), isFalse);
+      expect(fields['varie'], 'Nessuna');
+    });
+
+    test('senza titoli tutto va nella discussione', () {
+      expect(parseChatbotReply('Testo libero.'), {'discussione': 'Testo libero.'});
+      expect(parseChatbotReply('   '), isEmpty);
+    });
+
+    test('rispetta la scelta sui campi già scritti', () {
+      final fields = {'discussione': 'Nuova', 'delibere': 'Approvato'};
+      final keep = Verbale(discussione: 'Mia');
+      expect(replyTouchesFilledFields(keep, fields), isTrue);
+      applyChatbotReply(keep, fields, replace: false);
+      expect(keep.discussione, 'Mia');
+      expect(keep.delibere, 'Approvato');
+      final swap = Verbale(discussione: 'Mia');
+      applyChatbotReply(swap, fields, replace: true);
+      expect(swap.discussione, 'Nuova');
     });
   });
 }
