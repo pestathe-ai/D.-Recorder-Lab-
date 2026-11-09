@@ -1,0 +1,49 @@
+name: d_recorder_lab
+description: "D. Recorder Lab – registra riunioni lunghe, trascrive offline e prepara i verbali."
+publish_to: 'none'
+
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  sherpa_onnx: ^2.0.1
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  archive: ^4.0.7
+  audioplayers: ^6.8.1
+  share_plus: ^13.3.1
+  shared_preferences: ^2.3.0
+  flutter_secure_storage: ">=10.0.0 <12.0.0"
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ">=5.0.0 <8.0.0"
+  flutter_launcher_icons: ">=0.14.0 <1.0.0"
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#1D3A8A"
+  adaptive_icon_foreground: "assets/icon/foreground.png"
+  min_sdk_android: 24
+  remove_alpha_ios: true
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Sora
+      fonts:
+        - asset: assets/fonts/Sora-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Sora-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Sora-ExtraBold.ttf
+          weight: 800
